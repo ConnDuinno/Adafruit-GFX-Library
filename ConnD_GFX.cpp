@@ -224,13 +224,13 @@ void ConnD_GFX::drawRect(int16_t x, int16_t y,
   drawFastVLine(x+w-1, y, h, color);
 }
 
-void ConnD_GFXConnD_GFXConnD_GFX::drawFastVLine(int16_t x, int16_t y,
+void ConnD_GFX::drawFastVLine(int16_t x, int16_t y,
 				 int16_t h, uint16_t color) {
   // Update in subclasses if desired!
   drawLine(x, y, x, y+h-1, color);
 }
 
-void ConnD_GFXConnD_GFX::drawFastHLine(int16_t x, int16_t y,
+void ConnD_GFX::drawFastHLine(int16_t x, int16_t y,
 				 int16_t w, uint16_t color) {
   // Update in subclasses if desired!
   drawLine(x, y, x+w-1, y, color);
@@ -380,7 +380,7 @@ void ConnD_GFX::drawBitmap(int16_t x, int16_t y,
 // Draw a 1-bit color bitmap at the specified x, y position from the
 // provided bitmap buffer (must be PROGMEM memory) using color as the
 // foreground color and bg as the background color.
-void Adafruit_GFX::drawBitmap(int16_t x, int16_t y,
+void ConnD_GFX::drawBitmap(int16_t x, int16_t y,
             const uint8_t *bitmap, int16_t w, int16_t h,
             uint16_t color, uint16_t bg) {
 
@@ -401,7 +401,7 @@ void Adafruit_GFX::drawBitmap(int16_t x, int16_t y,
 
 // Draws a 1-bit bitmap from a sketch byte array (declared without the PROGMEM).
 // The w=width, h=height dimensions should be multiples of 8.
-void ConnDuino_GFX::
+void ConnD_GFX::
 drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap, 
 					int16_t w, int16_t h,
 					uint16_t color) {
@@ -443,9 +443,9 @@ void ConnD_GFX::drawXBitmap(int16_t x, int16_t y,
 }
 
 #if ARDUINO >= 100
-size_t Adafruit_GFX::write(uint8_t c) {
+size_t ConnD_GFX::write(uint8_t c) {
 #else
-void Adafruit_GFX::write(uint8_t c) {
+void ConnD_GFX::write(uint8_t c) {
 #endif
   if (c == '\n') {
     cursor_y += textsize*8;
