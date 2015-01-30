@@ -7,7 +7,7 @@ This library will be used for the ConnDuino board projects. For more info about 
 
               INSTALLATION 
 =========================================================================
-To download, click the DOWNLOAD ZIP button, uncompress and rename the uncompressed folder to "ConnD_GFX". Place the "ConnD_GFX" library folder to your arduino environment "<sketch folder>/libraries" subfolder. You can see, and even change, your <sketch folder> by the IDE under the menu File>Options. You may need to create the libraries subfolder if its your first library. Restart the IDE.
+To download, click the DOWNLOAD ZIP button, uncompress and rename the uncompressed folder to "ConnD_GFX". Place the "ConnD_GFX" library folder to your arduino environment "<sketch folder>/libraries" subfolder. You can see, and even change, your <sketch folder> in the IDE under the menu File>Preferences. You may need to create the libraries subfolder if this is your first library. Restart the IDE.
 
 
               ADAFRUIT_GFX master, README 
