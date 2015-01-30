@@ -45,6 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "ConnD_GFX.h"
+#include "Wire.h"
 #include "glcdfont.c"
 #ifdef __AVR__
  #include <avr/pgmspace.h>
@@ -399,12 +400,12 @@ void ConnD_GFX::drawBitmap(int16_t x, int16_t y,
 }
 
 
-// Draws a 1-bit bitmap from a sketch byte array (declared without the PROGMEM).
-// The w=width, h=height dimensions should be multiples of 8.
-void ConnD_GFX::
-drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap, 
-					int16_t w, int16_t h,
-					uint16_t color) {
+// Draws a 1-bit bitmap from a sketch byte array 
+//  (declared without the PROGMEM directive).
+// The w=width, h=height dimensions should be multiple of 8.
+void ConnD_GFX::drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap, 
+									int16_t w, int16_t h,
+									uint16_t color) {
 
 	int16_t i, j, k, byteWidth = w/8;
 	int16_t  x0 = x;
@@ -423,6 +424,60 @@ drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap,
 		x=x0;
 	}
 }
+
+
+// Draws a 1-bit bitmap from a byte array stored in an eeprom i2c device.
+// The w=width, h=height dimensions should be multiples of 8.
+// The memAddr argument tells where the position in memory space
+//    of the 1st byte. This should be multiple of 16 (i.e. 0,16,32 etc.)
+// The deviceAddr is the i2c address of the eeprom module
+void ConnD_GFX::drawBitmapInEEPROM(	int16_t x, int16_t y, uint8_t deviceAddr, int16_t memAddr, 
+									int16_t w, int16_t h,
+									uint16_t color) {
+
+#define EEPROM_READ_BLOCK_SIZE 16
+
+	int16_t byteLen = h*w/8;	//the total number of bytes to be read
+	int16_t x0   = x;			//the min x of the drawn pixels
+	int16_t xEnd = x+w;			//the max x of the drawn pixels
+	uint8_t data;				//will store the currently read byte 
+	int16_t bytes=0;			//counter for the read bytes 
+	int16_t nBlocks = (byteLen + EEPROM_READ_BLOCK_SIZE -1 )/EEPROM_READ_BLOCK_SIZE; 
+					//the number of blocks to be read
+	uint8_t  b, bit;	
+
+	Wire.beginTransmission(deviceAddr);
+		Wire.write((int)(memAddr >> 8));	// MSB
+		Wire.write((int)(memAddr & 0xFF));  // LSB
+	Wire.endTransmission();
+	
+	for (int16_t block=0; block<nBlocks; block++){
+
+		//fill the buffer with next block
+		Wire.requestFrom(deviceAddr, (uint8_t) EEPROM_READ_BLOCK_SIZE);	
+
+		for (uint8_t b = 0; b < EEPROM_READ_BLOCK_SIZE; b++){
+			if ( bytes < byteLen ) {
+				if (Wire.available()){
+					data = Wire.read();
+					for (bit=0; bit<8; bit++){
+						if ( data & 128 )    drawPixel(x, y, color);
+						x++;	
+						data<<=1;	//next bit
+					}
+					bytes++; 
+					if (x>=xEnd){
+						y++;
+						x=x0;
+					}
+				}
+			}
+			else break;
+		}//next byte in block	
+	}//next block
+}
+
+
 
 //Draw XBitMap Files (*.xbm), exported from GIMP,
 //Usage: Export from GIMP to *.xbm, rename *.xbm to *.c and open in editor.
