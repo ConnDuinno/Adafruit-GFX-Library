@@ -398,6 +398,32 @@ void Adafruit_GFX::drawBitmap(int16_t x, int16_t y,
   }
 }
 
+
+// Draws a 1-bit bitmap from a sketch byte array (declared without the PROGMEM).
+// The w=width, h=height dimensions should be multiples of 8.
+void ConnDuino_GFX::
+drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap, 
+					int16_t w, int16_t h,
+					uint16_t color) {
+
+	int16_t i, j, k, byteWidth = w/8;
+	int16_t  x0 = x;
+	
+	for (i=0; i<h; i++){
+		for (j=0; j<byteWidth; j++){
+			uint8_t b = bitmap[0]; 
+			for (k=0; k<8; k++){
+				if ( b & 128 )    drawPixel(x, y, color);
+				x++;	
+				b<<=1;	//next bit
+			}
+			bitmap++;	//next byte
+		}
+		y++;
+		x=x0;
+	}
+}
+
 //Draw XBitMap Files (*.xbm), exported from GIMP,
 //Usage: Export from GIMP to *.xbm, rename *.xbm to *.c and open in editor.
 //C Array can be directly used with this function
