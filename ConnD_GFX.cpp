@@ -675,24 +675,45 @@ ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, u
 	int16_t x0 = x;
 	int16_t yCol0 = y;
 
+	
+	_ee->setMemAddr(memAddr);
+	Wire.endTransmission();
+
+	uint8_t blockBytes = byteLen < CONND_GFX_I2C_READBLOCK ?
+							byteLen : (uint8_t)CONND_GFX_I2C_READBLOCK;
+	uint8_t block0    = blockBytes;
+	uint8_t bytesLeft = byteLen;
+	Wire.requestFrom(_ee->getI2CAddr(), blockBytes); //initial request
+
+
 
 	for (int16_t b = 0; b<byteLen; b++){
-		memAddr += _ee->readObjectSimple(memAddr, data);
-		for (uint8_t bit = 0; bit<8; bit++){
-			if (data & 1)     drawPixel(x, y, color);
-			else			  drawPixel(x, y, bg);
-			y++;
-			data >>= 1;	//next bit
+		if (blockBytes <= 0){
+			bytesLeft -= block0;
+			blockBytes = bytesLeft < CONND_GFX_I2C_READBLOCK ?
+								 bytesLeft : (uint8_t)CONND_GFX_I2C_READBLOCK;
+			block0 = blockBytes;
+			Wire.requestFrom(_ee->getI2CAddr(), blockBytes);
 		}
-		iCol++;
-		if (iCol >= w){
-			iCol = 0;
-			x = x0;
-			yCol0 += 8;
-		}
-		else{
-			x++;
-			y = yCol0;
+		if (Wire.available()){
+			data = Wire.read();
+			blockBytes--;
+			for (uint8_t bit = 0; bit < 8; bit++){
+				if (data & 1)     drawPixel(x, y, color);
+				else			  drawPixel(x, y, bg);
+				y++;
+				data >>= 1;	//next bit
+			}
+			iCol++;
+			if (iCol >= w){
+				iCol = 0;
+				x = x0;
+				yCol0 += 8;
+			}
+			else{
+				x++;
+				y = yCol0;
+			}
 		}
 	}
 }
