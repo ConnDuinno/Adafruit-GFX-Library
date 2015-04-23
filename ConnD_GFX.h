@@ -10,7 +10,21 @@
 
 #define swap(a, b) { int16_t t = a; a = b; b = t; }
 
+class eepromI2C;	//forward decl
+
 class ConnD_GFX : public Print {
+
+ protected:	
+	 eepromI2C* _ee;				//object for interfacing an eeprom i2c module. Used by the i2c routines 
+
+	 uint8_t   _fontByteH;			//the byte height of each char (number of bytes per column)
+	 char      _fontFirstChar;
+	 char      _fontLastChar;
+	 uint16_t  _fontDataAddr0;		//the 1st mem address of actual font pixel data
+	 uint8_t*  _fontCharW;			//an array where the widths of each font char is stored  
+	 uint16_t* _fontCharOffset;		//an array where the offset of each char from 1st one is stored (in bytes)
+	
+
 
  public:
 
@@ -28,6 +42,15 @@ class ConnD_GFX : public Print {
   virtual void  fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
   virtual void  fillScreen(uint16_t color);
   virtual void  invertDisplay(boolean i);
+
+  //eeprom setup
+  void  useEEPROM(eepromI2C& eeObj);
+
+  //fonts
+  //read and store character widths & offsets in array. Should have sufficient size. 
+  void  useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets);	
+
+
 
   // These exist only with Adafruit_GFX (no subclass overrides)
   void	drawCircle(int16_t x0, int16_t y0, int16_t r, uint16_t color);
@@ -60,13 +83,19 @@ class ConnD_GFX : public Print {
   void	drawBitmapInSketch	(int16_t x, int16_t y, const  uint8_t *bitmap,
 							  int16_t w, int16_t h, uint16_t color);
 
-  void  drawBitmapInEEPROM(	int16_t x, int16_t y, uint8_t deviceAddr, int16_t memAddr, 
+  void  drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
+									int16_t w, int16_t h, uint16_t color);
+
+  void  drawBitmap2_i2c(int16_t x, int16_t y, int16_t memAddr,
 									int16_t w, int16_t h, uint16_t color);
 
   void	drawXBitmap(int16_t x, int16_t y, const uint8_t *bitmap, 
                        int16_t w, int16_t h, uint16_t color);
   void	drawChar(int16_t x, int16_t y, unsigned char c, uint16_t color,
                     uint16_t bg, uint8_t size);
+
+  void  drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, uint16_t bg);
+
                     
   void	setCursor(int16_t x, int16_t y);
   void	setTextColor(uint16_t c);

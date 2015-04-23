@@ -45,6 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "ConnD_GFX.h"
+#include "ConnD_EEPROM.h"
 #include "Wire.h"
 #include "glcdfont.c"
 #ifdef __AVR__
@@ -52,6 +53,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #else
  #define pgm_read_byte(addr) (*(const unsigned char *)(addr))
 #endif
+
+
+#define CONND_GFX_I2C_READBLOCK 16
+
 
 ConnD_GFX::ConnD_GFX(int16_t w, int16_t h):
   WIDTH(w), HEIGHT(h)
@@ -64,6 +69,41 @@ ConnD_GFX::ConnD_GFX(int16_t w, int16_t h):
   textcolor = textbgcolor = 0xFFFF;
   wrap      = true;
 }
+
+
+
+void  
+ConnD_GFX::useEEPROM(eepromI2C& eep){
+	_ee =  &eep;
+}
+
+
+void  
+ConnD_GFX::useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets){
+	
+	_fontCharW		= charWidths;
+	_fontCharOffset = charOffsets;
+ 
+	//read header
+	uint8_t fonthead[3];
+	memAddr += _ee->readByteArray(memAddr, fonthead, 3);
+	_fontByteH		= fonthead[0];
+	_fontFirstChar  = fonthead[1];
+	_fontLastChar  = fonthead[2];
+	
+	//read char data
+	const uint8_t	numChars = _fontLastChar - _fontFirstChar + 1;
+	memAddr += _ee->readByteArray(memAddr, charWidths, numChars);
+
+	_fontDataAddr0 = memAddr;
+	//make char offsets
+	charOffsets[0] = 0;
+	for (uint8_t i = 1; i < numChars; i++){
+		charOffsets[i] = charOffsets[i - 1] + charWidths[i - 1]*_fontByteH;
+	}
+}
+
+
 
 // Draw a circle outline
 void ConnD_GFX::drawCircle(int16_t x0, int16_t y0, int16_t r,
@@ -430,33 +470,28 @@ void ConnD_GFX::drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap,
 // The w=width, h=height dimensions should be multiples of 8.
 // The memAddr argument tells where the position in memory space
 //    of the 1st byte. This should be multiple of 16 (i.e. 0,16,32 etc.)
-// The deviceAddr is the i2c address of the eeprom module
-void ConnD_GFX::drawBitmapInEEPROM(	int16_t x, int16_t y, uint8_t deviceAddr, int16_t memAddr, 
+void ConnD_GFX::drawBitmap2_i2c(int16_t x, int16_t y, int16_t memAddr,
 									int16_t w, int16_t h,
 									uint16_t color) {
 
-#define EEPROM_READ_BLOCK_SIZE 16
 
 	int16_t byteLen = h*w/8;	//the total number of bytes to be read
 	int16_t x0   = x;			//the min x of the drawn pixels
 	int16_t xEnd = x+w;			//the max x of the drawn pixels
 	uint8_t data;				//will store the currently read byte 
 	int16_t bytes=0;			//counter for the read bytes 
-	int16_t nBlocks = (byteLen + EEPROM_READ_BLOCK_SIZE -1 )/EEPROM_READ_BLOCK_SIZE; 
+	//int16_t nBlocks = (byteLen + EEPROM_READ_BLOCK_SIZE -1 )/EEPROM_READ_BLOCK_SIZE; 
 					//the number of blocks to be read
 	uint8_t  b, bit;	
 
-	Wire.beginTransmission(deviceAddr);
-		Wire.write((int)(memAddr >> 8));	// MSB
-		Wire.write((int)(memAddr & 0xFF));  // LSB
+	_ee->setMemAddr(memAddr);
 	Wire.endTransmission();
 	
-	for (int16_t block=0; block<nBlocks; block++){
-
+	while (true){
 		//fill the buffer with next block
-		Wire.requestFrom(deviceAddr, (uint8_t) EEPROM_READ_BLOCK_SIZE);	
+		Wire.requestFrom(_ee->getI2CAddr(), (uint8_t)CONND_GFX_I2C_READBLOCK);
 
-		for (uint8_t b = 0; b < EEPROM_READ_BLOCK_SIZE; b++){
+		for (uint8_t b = 0; b < CONND_GFX_I2C_READBLOCK; b++){
 			if ( bytes < byteLen ) {
 				if (Wire.available()){
 					data = Wire.read();
@@ -472,10 +507,55 @@ void ConnD_GFX::drawBitmapInEEPROM(	int16_t x, int16_t y, uint8_t deviceAddr, in
 					}
 				}
 			}
-			else break;
+			else return;
 		}//next byte in block	
 	}//next block
 }
+
+
+// Draws a 1-bit bitmap from a byte array stored in an eeprom i2c device.
+// The w=width, h=height dimensions should be multiples of 8.
+// The memAddr argument tells where the position in memory space
+//    of the 1st byte. This may be anything. Page borders are respected.
+void ConnD_GFX::drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
+									int16_t w, int16_t h,
+									uint16_t color) {
+
+
+	int16_t byteLen = h*w/8;	//the total number of bytes to be read
+	int16_t x0   = x;			//the min x of the drawn pixels
+	int16_t xEnd = x+w;			//the max x of the drawn pixels
+	uint8_t data;				//will store the currently read byte 
+	uint8_t blockBytes = (memAddr / CONND_GFX_I2C_READBLOCK + 1)*CONND_GFX_I2C_READBLOCK - memAddr;
+	uint8_t  b, bit;	
+
+	_ee->setMemAddr(memAddr);
+	Wire.endTransmission();
+	
+	Wire.requestFrom(_ee->getI2CAddr(), blockBytes); //initial request
+
+	for (int16_t b=0; b<byteLen; b++){
+		if (blockBytes==0){
+			//subsequent request fetch a full block size
+			Wire.requestFrom(_ee->getI2CAddr(), (uint8_t)CONND_GFX_I2C_READBLOCK);
+			blockBytes = CONND_GFX_I2C_READBLOCK;
+		}
+		if(Wire.available()){
+			data = Wire.read();
+			blockBytes--;
+			for (bit=0; bit<8; bit++){
+				if ( data & 128 )    drawPixel(x, y, color);
+				x++;	
+				data<<=1;	//next bit
+			}
+			if (x>=xEnd){
+				y++;
+				x=x0;
+			}
+		}
+	}
+}
+
 
 
 
@@ -497,26 +577,53 @@ void ConnD_GFX::drawXBitmap(int16_t x, int16_t y,
   }
 }
 
+//#if ARDUINO >= 100
+//size_t ConnD_GFX::write(uint8_t c) {
+//#else
+//void ConnD_GFX::write(uint8_t c) {
+//#endif
+//  if (c == '\n') {
+//    cursor_y += textsize*8;
+//    cursor_x  = 0;
+//  } else if (c == '\r') {
+//    // skip em
+//  } else {
+//    drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
+//    cursor_x += textsize*6;
+//    if (wrap && (cursor_x > (_width - textsize*6))) {
+//      cursor_y += textsize*8;
+//      cursor_x = 0;
+//    }
+//  }
+//#if ARDUINO >= 100
+//  return 1;
+//#endif
+//}
+
 #if ARDUINO >= 100
 size_t ConnD_GFX::write(uint8_t c) {
 #else
 void ConnD_GFX::write(uint8_t c) {
 #endif
-  if (c == '\n') {
-    cursor_y += textsize*8;
-    cursor_x  = 0;
-  } else if (c == '\r') {
-    // skip em
-  } else {
-    drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
-    cursor_x += textsize*6;
-    if (wrap && (cursor_x > (_width - textsize*6))) {
-      cursor_y += textsize*8;
-      cursor_x = 0;
-    }
-  }
+	if (c == '\n') {
+		cursor_y += _fontByteH * 8;
+		cursor_x = 0;
+	}
+	else if (c == '\r') {
+		// skip em
+	}
+	else {
+
+		drawChar_i2c(cursor_x, cursor_y, c, textcolor, textbgcolor);
+		uint8_t padding = _fontCharW[c - _fontFirstChar] + 1;
+		cursor_x += padding;
+		if (wrap && (cursor_x > (_width - padding))) {
+			cursor_y += _fontByteH * 8;
+			cursor_x = 0;
+		}
+	}
 #if ARDUINO >= 100
-  return 1;
+	return 1;
 #endif
 }
 
@@ -554,6 +661,42 @@ void ConnD_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
     }
   }
 }
+
+
+void  
+ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, uint16_t bg){
+
+	uint8_t w		 = _fontCharW[c - _fontFirstChar];
+	uint16_t memAddr = _fontCharOffset[c - _fontFirstChar] + _fontDataAddr0;
+	int8_t byteLen   = _fontByteH * w;	//the total number of bytes to be read
+	
+	uint8_t data;
+	uint8_t iCol=0;
+	int16_t x0 = x;
+	int16_t yCol0 = y;
+
+
+	for (int16_t b = 0; b<byteLen; b++){
+		memAddr += _ee->readObjectSimple(memAddr, data);
+		for (uint8_t bit = 0; bit<8; bit++){
+			if (data & 1)     drawPixel(x, y, color);
+			else			  drawPixel(x, y, bg);
+			y++;
+			data >>= 1;	//next bit
+		}
+		iCol++;
+		if (iCol >= w){
+			iCol = 0;
+			x = x0;
+			yCol0 += 8;
+		}
+		else{
+			x++;
+			y = yCol0;
+		}
+	}
+}
+
 
 void ConnD_GFX::setCursor(int16_t x, int16_t y) {
   cursor_x = x;
