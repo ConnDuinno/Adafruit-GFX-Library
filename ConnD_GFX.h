@@ -8,6 +8,10 @@
  #include "WProgram.h"
 #endif
 
+//if USE_I2C_FONT>0  the font defined through the useFont_i2c function will be used
+//else				 the 5x7 stock font
+#define USE_I2C_FONT 1
+
 #define swap(a, b) { int16_t t = a; a = b; b = t; }
 
 class eepromI2C;	//forward decl
@@ -30,8 +34,31 @@ class ConnD_GFX : public Print {
 
   ConnD_GFX(int16_t w, int16_t h); // Constructor
 
-  // This MUST be defined by the subclass:
+  void  useEEPROM(eepromI2C& eeObj); //eeprom setup. Should preceed and other i2c function call
+
+  //fonts
+  void  useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets);
+  //read form eeprom and store character widths & offsets in arrays. Those should have sufficient size. 
+  //Should be called before any text printing.
+  //The font data should contain the following (starting from the memAddr byte):
+  //	- uint8  byteH	//the height in bytes of each char
+  //	- uint8  c0		//the 1st character of the font
+  //	- uint8	 clast	//the last  character of the font
+  //	- uint8  w[clast-c0+1]  array with the widths (in pixels) of all chaarcters
+  //	- uint8  data[]	//the font bitmaps. Bytes are vertically aligned with LSB priority
+						//For fonts with byte height>1 the rows have priority
+  //For building the expected font data in eeprom a utility function 
+  // of the eepromI2C class may be used. 
+
+  // The following virtuals MUST be defined by the subclass:
   virtual void drawPixel(int16_t x, int16_t y, uint16_t color) = 0;
+
+  
+  virtual void drawByte(int16_t x, int16_t y, uint8_t _byte, 
+					    uint16_t color, uint16_t bg, uint8_t horizontal) = 0;
+						//draws a byte (8 pixels) vertically or horizontally. 
+  
+ 
 
   // These MAY be overridden by the subclass to provide device-specific
   // optimized code.  Otherwise 'generic' versions are used.
@@ -42,14 +69,6 @@ class ConnD_GFX : public Print {
   virtual void  fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
   virtual void  fillScreen(uint16_t color);
   virtual void  invertDisplay(boolean i);
-
-  //eeprom setup
-  void  useEEPROM(eepromI2C& eeObj);
-
-  //fonts
-  //read and store character widths & offsets in array. Should have sufficient size. 
-  void  useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets);	
-
 
 
   // These exist only with Adafruit_GFX (no subclass overrides)
@@ -79,15 +98,25 @@ class ConnD_GFX : public Print {
                       
   void	drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap,
                        int16_t w, int16_t h, uint16_t color, uint16_t bg);
-                       
-  void	drawBitmapInSketch	(int16_t x, int16_t y, const  uint8_t *bitmap,
+                       //stock version for bitmap drawing using PROGMEM. 
+					   //Bytes should be horizontally aligned
+
+  void	drawBitmapRAM	(int16_t x, int16_t y, const  uint8_t *bitmap,
 							  int16_t w, int16_t h, uint16_t color);
+					  //bitmap drawing from an array declared in sketch (RAM)
+					  //Bytes should be horizontally aligned
 
   void  drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
-									int16_t w, int16_t h, uint16_t color);
+						int16_t w, int16_t h, uint16_t color, uint16_t bg);
+					  //bitmap drawing reading the eeprom. This verion uses drawByte routine
+					  //and thus backgroung color is required. It is faster. 
+					  //Bytes should be horizontally aligned
 
-  void  drawBitmap2_i2c(int16_t x, int16_t y, int16_t memAddr,
-									int16_t w, int16_t h, uint16_t color);
+  void  drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
+						int16_t w, int16_t h, uint16_t color);
+					  //bitmap drawing reading the eeprom. This verion uses drawPixel routine
+					  //and thus no backgroung color is required. It is slower. 
+					  //Bytes should be horizontally aligned.
 
   void	drawXBitmap(int16_t x, int16_t y, const uint8_t *bitmap, 
                        int16_t w, int16_t h, uint16_t color);
@@ -95,12 +124,16 @@ class ConnD_GFX : public Print {
                     uint16_t bg, uint8_t size);
 
   void  drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, uint16_t bg);
+					  //draws a character a defined eeprom font 
+					  //the useFont_i2c function should be called first
 
                     
   void	setCursor(int16_t x, int16_t y);
   void	setTextColor(uint16_t c);
   void	setTextColor(uint16_t c, uint16_t bg);
+#if USE_I2C_FONT == 0
   void	setTextSize(uint8_t s);
+#endif
   void	setTextWrap(boolean w);
   void	setRotation(uint8_t r);
 
@@ -123,9 +156,8 @@ class ConnD_GFX : public Print {
     cursor_x, cursor_y;
   uint16_t
     textcolor, textbgcolor;
-  uint8_t
-    textsize,
-    rotation;
+  uint8_t    textsize;
+  uint8_t    rotation;
   boolean
     wrap; // If set, 'wrap' text at right edge of display
 };
