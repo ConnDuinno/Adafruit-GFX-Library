@@ -47,7 +47,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ConnD_GFX.h"
 #include "ConnD_EEPROM.h"
 #include "Wire.h"
-#include "glcdfont.c"
+#if USE_I2C_FONT==0
+	#include "glcdfont.c"
+#endif
 #ifdef __AVR__
  #include <avr/pgmspace.h>
 #else
@@ -470,7 +472,7 @@ void ConnD_GFX::drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap,
 // The w=width, h=height dimensions should be multiples of 8.
 // The memAddr argument tells where the position in memory space
 //    of the 1st byte. This should be multiple of 16 (i.e. 0,16,32 etc.)
-void ConnD_GFX::drawBitmap2_i2c(int16_t x, int16_t y, int16_t memAddr,
+void ConnD_GFX::drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
 									int16_t w, int16_t h,
 									uint16_t color) {
 
@@ -517,9 +519,10 @@ void ConnD_GFX::drawBitmap2_i2c(int16_t x, int16_t y, int16_t memAddr,
 // The w=width, h=height dimensions should be multiples of 8.
 // The memAddr argument tells where the position in memory space
 //    of the 1st byte. This may be anything. Page borders are respected.
+// 
 void ConnD_GFX::drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
 									int16_t w, int16_t h,
-									uint16_t color) {
+									uint16_t color, uint16_t bg) {
 
 
 	int16_t byteLen = h*w/8;	//the total number of bytes to be read
@@ -543,11 +546,8 @@ void ConnD_GFX::drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
 		if(Wire.available()){
 			data = Wire.read();
 			blockBytes--;
-			for (bit=0; bit<8; bit++){
-				if ( data & 128 )    drawPixel(x, y, color);
-				x++;	
-				data<<=1;	//next bit
-			}
+			drawByteY(x, y, data, color, bg, 1);
+			x += 8;
 			if (x>=xEnd){
 				y++;
 				x=x0;
@@ -577,57 +577,42 @@ void ConnD_GFX::drawXBitmap(int16_t x, int16_t y,
   }
 }
 
-//#if ARDUINO >= 100
-//size_t ConnD_GFX::write(uint8_t c) {
-//#else
-//void ConnD_GFX::write(uint8_t c) {
-//#endif
-//  if (c == '\n') {
-//    cursor_y += textsize*8;
-//    cursor_x  = 0;
-//  } else if (c == '\r') {
-//    // skip em
-//  } else {
-//    drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
-//    cursor_x += textsize*6;
-//    if (wrap && (cursor_x > (_width - textsize*6))) {
-//      cursor_y += textsize*8;
-//      cursor_x = 0;
-//    }
-//  }
-//#if ARDUINO >= 100
-//  return 1;
-//#endif
-//}
 
 #if ARDUINO >= 100
 size_t ConnD_GFX::write(uint8_t c) {
 #else
 void ConnD_GFX::write(uint8_t c) {
 #endif
-	if (c == '\n') {
-		cursor_y += _fontByteH * 8;
-		cursor_x = 0;
-	}
-	else if (c == '\r') {
-		// skip em
-	}
-	else {
-
-		drawChar_i2c(cursor_x, cursor_y, c, textcolor, textbgcolor);
-		uint8_t padding = _fontCharW[c - _fontFirstChar] + 1;
-		cursor_x += padding;
-		if (wrap && (cursor_x > (_width - padding))) {
-			cursor_y += _fontByteH * 8;
-			cursor_x = 0;
-		}
-	}
+  if (c == '\n') {
+    cursor_y += textsize*8;
+    cursor_x  = 0;
+  } else if (c == '\r') {
+    // skip em
+  } else {
+#if USE_I2C_FONT==0
+    drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
+    cursor_x += textsize*6;
+    if (wrap && (cursor_x > (_width - textsize*6))) {
+      cursor_y += textsize*8;
+      cursor_x = 0;
+    }
+#else
+	  drawChar_i2c(cursor_x, cursor_y, c, textcolor, textbgcolor);
+	  uint8_t padding = _fontCharW[c - _fontFirstChar] + 1;
+	  cursor_x += padding;
+	  if (wrap && (cursor_x > (_width - padding))) {
+		  cursor_y += _fontByteH * 8;
+		  cursor_x = 0;
+	  }
+#endif
+  }
 #if ARDUINO >= 100
-	return 1;
+  return 1;
 #endif
 }
 
-// Draw a character
+
+#if USE_I2C_FONT==0
 void ConnD_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
 			    uint16_t color, uint16_t bg, uint8_t size) {
 
@@ -661,8 +646,12 @@ void ConnD_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
     }
   }
 }
+#else
+void ConnD_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
+	uint16_t color, uint16_t bg, uint8_t size) {}
+#endif
 
-
+#if USE_I2C_FONT>0
 void  
 ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, uint16_t bg){
 
@@ -673,7 +662,7 @@ ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, u
 	uint8_t data;
 	uint8_t iCol=0;
 	int16_t x0 = x;
-	int16_t yCol0 = y;
+	int16_t y0 = y;
 
 	
 	_ee->setMemAddr(memAddr);
@@ -684,7 +673,6 @@ ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, u
 	uint8_t block0    = blockBytes;
 	uint8_t bytesLeft = byteLen;
 	Wire.requestFrom(_ee->getI2CAddr(), blockBytes); //initial request
-
 
 
 	for (int16_t b = 0; b<byteLen; b++){
@@ -698,35 +686,34 @@ ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, u
 		if (Wire.available()){
 			data = Wire.read();
 			blockBytes--;
-			for (uint8_t bit = 0; bit < 8; bit++){
-				if (data & 1)     drawPixel(x, y, color);
-				else			  drawPixel(x, y, bg);
-				y++;
-				data >>= 1;	//next bit
-			}
+			drawByteY(x, y0, data, color, bg, 0);	
 			iCol++;
 			if (iCol >= w){
 				iCol = 0;
 				x = x0;
-				yCol0 += 8;
+				y0 += 8;
 			}
 			else{
 				x++;
-				y = yCol0;
 			}
 		}
 	}
 }
-
+#else
+void
+ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, uint16_t bg){}
+#endif
 
 void ConnD_GFX::setCursor(int16_t x, int16_t y) {
   cursor_x = x;
   cursor_y = y;
 }
 
+#if USE_I2C_FONT==0
 void ConnD_GFX::setTextSize(uint8_t s) {
   textsize = (s > 0) ? s : 1;
 }
+#endif
 
 void ConnD_GFX::setTextColor(uint16_t c) {
   // For 'transparent' background, we'll set the bg 
