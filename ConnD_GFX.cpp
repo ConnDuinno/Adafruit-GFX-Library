@@ -79,7 +79,6 @@ ConnD_GFX::useEEPROM(eepromI2C& eep){
 	_ee =  &eep;
 }
 
-
 void  
 ConnD_GFX::useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets){
 	
@@ -445,7 +444,7 @@ void ConnD_GFX::drawBitmap(int16_t x, int16_t y,
 // Draws a 1-bit bitmap from a sketch byte array 
 //  (declared without the PROGMEM directive).
 // The w=width, h=height dimensions should be multiple of 8.
-void ConnD_GFX::drawBitmapInSketch(	int16_t x, int16_t y, const uint8_t *bitmap, 
+void ConnD_GFX::drawBitmapRAM(	int16_t x, int16_t y, const uint8_t *bitmap, 
 									int16_t w, int16_t h,
 									uint16_t color) {
 
@@ -546,7 +545,7 @@ void ConnD_GFX::drawBitmap_i2c(int16_t x, int16_t y, int16_t memAddr,
 		if(Wire.available()){
 			data = Wire.read();
 			blockBytes--;
-			drawByteY(x, y, data, color, bg, 1);
+			drawByte(x, y, data, color, bg, 1);
 			x += 8;
 			if (x>=xEnd){
 				y++;
@@ -686,7 +685,7 @@ ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, u
 		if (Wire.available()){
 			data = Wire.read();
 			blockBytes--;
-			drawByteY(x, y0, data, color, bg, 0);	
+			drawByte(x, y0, data, color, bg, 0);	
 			iCol++;
 			if (iCol >= w){
 				iCol = 0;

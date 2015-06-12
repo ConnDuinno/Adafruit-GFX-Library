@@ -38,9 +38,9 @@ class ConnD_GFX : public Print {
 
   //fonts
   void  useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets);
-  //read form eeprom and store character widths & offsets in arrays. Those should have sufficient size. 
+  //read from eeprom and store character widths & offsets in arrays. Those should have sufficient size. 
   //Should be called before any text printing.
-  //The font data should contain the following (starting from the memAddr byte):
+  //The font data should contain the following (beginning at the memAddr byte):
   //	- uint8  byteH	//the height in bytes of each char
   //	- uint8  c0		//the 1st character of the font
   //	- uint8	 clast	//the last  character of the font
