@@ -74,38 +74,6 @@ ConnD_GFX::ConnD_GFX(int16_t w, int16_t h):
 
 
 
-void  
-ConnD_GFX::useEEPROM(eepromI2C& eep){
-	_ee =  &eep;
-}
-
-void  
-ConnD_GFX::useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets){
-	
-	_fontCharW		= charWidths;
-	_fontCharOffset = charOffsets;
- 
-	//read header
-	uint8_t fonthead[3];
-	memAddr += _ee->readByteArray(memAddr, fonthead, 3);
-	_fontByteH		= fonthead[0];
-	_fontFirstChar  = fonthead[1];
-	_fontLastChar  = fonthead[2];
-	
-	//read char data
-	const uint8_t	numChars = _fontLastChar - _fontFirstChar + 1;
-	memAddr += _ee->readByteArray(memAddr, charWidths, numChars);
-
-	_fontDataAddr0 = memAddr;
-	//make char offsets
-	charOffsets[0] = 0;
-	for (uint8_t i = 1; i < numChars; i++){
-		charOffsets[i] = charOffsets[i - 1] + charWidths[i - 1]*_fontByteH;
-	}
-}
-
-
-
 // Draw a circle outline
 void ConnD_GFX::drawCircle(int16_t x0, int16_t y0, int16_t r,
     uint16_t color) {
@@ -597,10 +565,10 @@ void ConnD_GFX::write(uint8_t c) {
     }
 #else
 	  drawChar_i2c(cursor_x, cursor_y, c, textcolor, textbgcolor);
-	  uint8_t padding = _fontCharW[c - _fontFirstChar] + 1;
+	  uint8_t padding = _font->charW[c - _font->firstChar] + 1;
 	  cursor_x += padding;
 	  if (wrap && (cursor_x > (_width - padding))) {
-		  cursor_y += _fontByteH * 8;
+		  cursor_y += _font->byteH * 8;
 		  cursor_x = 0;
 	  }
 #endif
@@ -654,9 +622,9 @@ void ConnD_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
 void  
 ConnD_GFX::drawChar_i2c(int16_t x, int16_t y, unsigned char c, uint16_t color, uint16_t bg){
 
-	uint8_t w		 = _fontCharW[c - _fontFirstChar];
-	uint16_t memAddr = _fontCharOffset[c - _fontFirstChar] + _fontDataAddr0;
-	int8_t byteLen   = _fontByteH * w;	//the total number of bytes to be read
+	uint8_t w		 = _font->charW[c - _font->firstChar];
+	uint16_t memAddr = _font->charOffset[c - _font->firstChar] + _font->dataAddr0;
+	int8_t byteLen   = _font->byteH * w;	//the total number of bytes to be read
 	
 	uint8_t data;
 	uint8_t iCol=0;

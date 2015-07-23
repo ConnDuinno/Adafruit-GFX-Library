@@ -16,39 +16,35 @@
 
 class eepromI2C;	//forward decl
 
+struct ConnD_fontData{
+	uint8_t   byteH;			//the byte height of each char (number of bytes per column)
+	char      firstChar;
+	char      lastChar;
+	uint16_t  dataAddr0;		//the 1st mem address of actual font pixel data
+	uint8_t*  charW;			//an array where the widths of each font char is stored  
+	uint16_t* charOffset;		//an array where the offset of each char from 1st one is stored (in bytes)
+};
+
 class ConnD_GFX : public Print {
 
  protected:	
-	 eepromI2C* _ee;				//object for interfacing an eeprom i2c module. Used by the i2c routines 
-
-	 uint8_t   _fontByteH;			//the byte height of each char (number of bytes per column)
-	 char      _fontFirstChar;
-	 char      _fontLastChar;
-	 uint16_t  _fontDataAddr0;		//the 1st mem address of actual font pixel data
-	 uint8_t*  _fontCharW;			//an array where the widths of each font char is stored  
-	 uint16_t* _fontCharOffset;		//an array where the offset of each char from 1st one is stored (in bytes)
-	
-
+	 eepromI2C*			_ee;				//object for interfacing an eeprom i2c module. Used by the i2c routines 
+	 ConnD_fontData*	_font;				//the active font data
 
  public:
 
   ConnD_GFX(int16_t w, int16_t h); // Constructor
 
-  void  useEEPROM(eepromI2C& eeObj); //eeprom setup. Should preceed and other i2c function call
+  //eeprom setup. Should preceed and other i2c function call
+  void  useEEPROM(eepromI2C& eeObj){
+	_ee =  &eeObj;
+  }
+	
+  //Font data setup. Should preceed text output
+  void  useFont(ConnD_fontData& f){
+	  _font = &f;
+  }
 
-  //fonts
-  void  useFont_i2c(uint16_t memAddr, uint8_t* charWidths, uint16_t* charOffsets);
-  //read from eeprom and store character widths & offsets in arrays. Those should have sufficient size. 
-  //Should be called before any text printing.
-  //The font data should contain the following (beginning at the memAddr byte):
-  //	- uint8  byteH	//the height in bytes of each char
-  //	- uint8  c0		//the 1st character of the font
-  //	- uint8	 clast	//the last  character of the font
-  //	- uint8  w[clast-c0+1]  array with the widths (in pixels) of all chaarcters
-  //	- uint8  data[]	//the font bitmaps. Bytes are vertically aligned with LSB priority
-						//For fonts with byte height>1 the rows have priority
-  //For building the expected font data in eeprom a utility function 
-  // of the eepromI2C class may be used. 
 
   // The following virtuals MUST be defined by the subclass:
   virtual void drawPixel(int16_t x, int16_t y, uint16_t color) = 0;
